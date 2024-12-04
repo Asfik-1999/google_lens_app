@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Document OCR</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-file-alt"></i> Smart Document OCR</h1>
+        <div class="upload-section">
+            <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+                <div class="file-input-wrapper">
+                    <input type="file" name="file" id="file-input" class="file-input" accept=".pdf,.png,.jpg,.jpeg" required>
+                    <label for="file-input" class="file-label">
+                        <i class="fas fa-cloud-upload-alt"></i> Choose File
+                    </label>
+                    <div id="file-name" class="file-name">No file chosen</div>
+                </div>
+                <div class="button-group">
+                    <button type="submit" class="btn process-btn" id="process-btn" disabled>
+                        <i class="fas fa-cogs"></i> Process Document
+                    </button>
+                    <button type="button" class="btn reset-btn" id="reset-btn">
+                        <i class="fas fa-redo"></i> Reset
+                    </button>
+                    <button type="button" class="btn cancel-btn" id="cancel-btn" style="display: none;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+        <div id="preview-section" class="preview-section">
+            <div class="processing-animation" id="processing-animation">
+                <div class="spinner"></div>
+                <div class="progress-text">Processing... <span id="progress-timer">0</span>s</div>
+            </div>
+            
+            <div class="result-container" id="result-container">
+                <h3>Processing Complete!</h3>
+                <div class="preview-buttons">
+                    <button class="preview-btn" id="preview-btn">
+                        <i class="fas fa-eye"></i> Preview Document
+                    </button>
+                    <a href="#" id="download-btn" class="download-btn">
+                        <i class="fas fa-download"></i> Download Document
+                    </a>
+                </div>
+                <div id="pdf-preview" class="pdf-preview"></div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <div class="footer-content">
+                <p>Created by <span class="creator">Asfik</span> © 2024</p>
+            </div>
+        </footer>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const fileName = document.getElementById('file-name');
+        const processBtn = document.getElementById('process-btn');
+        const previewSection = document.getElementById('preview-section');
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                fileName.textContent = file.name;
+                processBtn.disabled = false;
+            } else {
+                fileName.textContent = 'No file chosen';
+                processBtn.disabled = true;
+            }
+        });
+
+        let processingTimer;
+        let seconds = 0;
+
+        function startProcessingTimer() {
+            const timerElement = document.getElementById('progress-timer');
+            seconds = 0;
+            processingTimer = setInterval(() => {
+                seconds++;
+                timerElement.textContent = seconds;
+            }, 1000);
+        }
+
+        function stopProcessingTimer() {
+            clearInterval(processingTimer);
+        }
+
+        let currentUpload = null;
+
+        // Reset functionality
+        const resetBtn = document.getElementById('reset-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+
+        function resetForm() {
+            const form = document.getElementById('upload-form');
+            form.reset();
+            fileName.textContent = 'No file chosen';
+            processBtn.disabled = true;
+            previewSection.style.display = 'none';
+            document.getElementById('pdf-preview').style.display = 'none';
+            document.getElementById('pdf-preview').innerHTML = '';
+            
+            // Reset processing elements
+            document.getElementById('processing-animation').style.display = 'none';
+            document.getElementById('result-container').style.display = 'none';
+            stopProcessingTimer();
+        }
+
+        resetBtn.addEventListener('click', () => {
+            resetForm();
+            resetBtn.classList.add('shake');
+            setTimeout(() => resetBtn.classList.remove('shake'), 500);
+        });
+
+        // Cancel functionality
+        cancelBtn.addEventListener('click', () => {
+            if (currentUpload) {
+                currentUpload.abort();
+                currentUpload = null;
+            }
+            resetForm();
+            cancelBtn.style.display = 'none';
+            processBtn.disabled = false;
+            processBtn.innerHTML = '<i class="fas fa-cogs"></i> Process Document';
+        });
+
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            processBtn.disabled = true;
+            cancelBtn.style.display = 'inline-flex';
+            
+            // Show processing animation
+            document.getElementById('processing-animation').style.display = 'block';
+            document.getElementById('result-container').style.display = 'none';
+            previewSection.style.display = 'block';
+            
+            startProcessingTimer();
+
+            const formData = new FormData(e.target);
+            try {
+                currentUpload = new AbortController();
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData,
+                    signal: currentUpload.signal
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    
+                    // Show result container
+                    document.getElementById('processing-animation').style.display = 'none';
+                    document.getElementById('result-container').style.display = 'block';
+                    
+                    // Setup download button
+                    const downloadBtn = document.getElementById('download-btn');
+                    downloadBtn.href = url;
+                    downloadBtn.download = 'processed_document.pdf';
+                    
+                    // Setup preview button
+                    const previewBtn = document.getElementById('preview-btn');
+                    previewBtn.onclick = () => {
+                        const previewContainer = document.getElementById('pdf-preview');
+                        previewContainer.style.display = 'block';
+                        previewContainer.innerHTML = `
+                            <iframe src="${url}#toolbar=0" width="100%" height="500px" frameborder="0"></iframe>
+                        `;
+                        previewBtn.classList.add('shake');
+                        setTimeout(() => previewBtn.classList.remove('shake'), 500);
+                    };
+                } else {
+                    throw new Error('Processing failed');
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    console.log('Upload cancelled');
+                } else {
+                    alert('Error processing document');
+                }
+            } finally {
+                currentUpload = null;
+                stopProcessingTimer();
+                processBtn.disabled = false;
+                processBtn.innerHTML = '<i class="fas fa-cogs"></i> Process Document';
+                cancelBtn.style.display = 'none';
+            }
+        });
+
+        // Add hover effects for buttons
+        document.querySelectorAll('.btn').forEach(button => {
+            button.addEventListener('mouseover', () => {
+                button.querySelector('i').style.transform = 'scale(1.2) rotate(10deg)';
+            });
+            
+            button.addEventListener('mouseout', () => {
+                button.querySelector('i').style.transform = 'scale(1) rotate(0)';
+            });
+        });
+    </script>
+</body>
+</html>

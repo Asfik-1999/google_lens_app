@@ -1,0 +1,7 @@
+flask
+werkzeug
+pytesseract
+opencv-python
+pdf2image
+reportlab
+pillow
